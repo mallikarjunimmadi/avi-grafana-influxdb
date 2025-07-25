@@ -1,0 +1,92 @@
+{
+  "datasource": {
+    "type": "influxdb",
+    "uid": "YOUR-INFLUXDB-V2-UID"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "location",
+        "type": "query",
+        "label": "Location",
+        "query": "from(bucket: v.defaultBucket)\n  |> range(start: -30d)\n  |> filter(fn: (r) => r[\"_field\"] == \"value\")\n  |> v1.tagValues(tag: \"location\")",
+        "includeAll": false
+      },
+      {
+        "name": "environment",
+        "type": "query",
+        "label": "Environment",
+        "query": "from(bucket: v.defaultBucket)\n  |> range(start: -30d)\n  |> filter(fn: (r) => r[\"_field\"] == \"value\" and r[\"location\"] =~ /^${location:regex}$/)\n  |> v1.tagValues(tag: \"environment\")",
+        "includeAll": false
+      },
+      {
+        "name": "device",
+        "type": "query",
+        "label": "Device",
+        "query": "from(bucket: v.defaultBucket)\n  |> range(start: -30d)\n  |> filter(fn: (r) => r[\"_field\"] == \"value\" and r[\"location\"] =~ /^${location:regex}$/ and r[\"environment\"] =~ /^${environment:regex}$/)\n  |> v1.tagValues(tag: \"avicontroller\")",
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "VS UP",
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"status_up\" and r[\"avicontroller\"] =~ /^${device:regex}$/ and r[\"environment\"] =~ /^${environment:regex}$/ and r[\"location\"] =~ /^${location:regex}$/ and r[\"metric_type\"] == \"virtualservice_up\")\n  |> last()\n  |> yield(name: \"VS Up\")"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "CPS",
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"l4_client.avg_new_established_conns\" and r[\"avicontroller\"] =~ /^${device:regex}$/ and r[\"environment\"] =~ /^${environment:regex}$/ and r[\"location\"] =~ /^${location:regex}$/ and r[\"metric_type\"] == \"virtualservice_metrics\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> last()\n  |> yield(name: \"connections\")"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "SSL TPS",
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"l7_client.avg_ssl_handshakes_new\" and r[\"avicontroller\"] =~ /^${device:regex}$/ and r[\"environment\"] =~ /^${environment:regex}$/ and r[\"location\"] =~ /^${location:regex}$/ and r[\"metric_type\"] == \"virtualservice_metrics\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> last()\n  |> yield(name: \"SSL TPS\")"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total Bandwidth",
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"se_if.avg_bandwidth\" and r[\"avicontroller\"] =~ /^${device:regex}$/ and r[\"environment\"] =~ /^${environment:regex}$/ and r[\"location\"] =~ /^${location:regex}$/ and r[\"metric_type\"] == \"serviceengine_metrics\")\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: r._value * 1.0 }))\n  |> last()\n  |> yield(name: \"Total SE Bandwidth\")"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Controller CPU%",
+      "targets": [
+        {
+          "refId": "A",
+          "query": "from(bucket: v.defaultBucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"controller_stats.avg_cpu_usage\" and r[\"avicontroller\"] =~ /^${device:regex}$/ and r[\"environment\"] =~ /^${environment:regex}$/ and r[\"location\"] =~ /^${location:regex}$/ and r[\"metric_type\"] == \"controller_metrics\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"cluster_node\"])\n  |> yield(name: \"Controller CPU%\")"
+        }
+      ]
+    }
+    // ... similar definitions for each panel in your original dashboard ...
+  ],
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "schemaVersion": 36,
+  "version": 1,
+  "title": "01‑Summary Flux v2"
+}
